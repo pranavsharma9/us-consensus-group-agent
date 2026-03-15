@@ -1,14 +1,3 @@
-"""
-Simplified ReAct-style agent for Snowflake census queries.
-
-Flow:
-  START → agent → (if tool_calls) → tools → agent → ... → END
-
-The LLM has a single run_sql tool and a comprehensive system prompt.
-It queries metadata tables itself, adapts based on real results, and generates
-the final SQL — no separate planning phase, no JSON plan, no coordinator dispatch.
-"""
-
 import json
 import logging
 from datetime import datetime, timezone
@@ -16,7 +5,7 @@ from typing import Any, Dict, List, Literal
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import StructuredTool
-from langgraph.graph import END, START, StateGraph
+from langgraph.graph import START, StateGraph
 from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel
 
@@ -26,29 +15,20 @@ from app.prompts.prompts import build_system_prompt
 from app.services.llm_service import LLMService
 from app.services.few_shot_retriever import FewShotRetriever
 from app.services.snowflake_service import SnowflakeService
+from app.services.agent_context import AgentContext
 
 logger = logging.getLogger(__name__)
 
 _LOG_FILE = "log.txt"
 
-
-# ---------------------------------------------------------------------------
-# run_sql tool input schema
-# ---------------------------------------------------------------------------
-
 class RunSQLInput(BaseModel):
     sql: str
-
-
-# ---------------------------------------------------------------------------
-# QueryWorkflow
-# ---------------------------------------------------------------------------
 
 class QueryWorkflow:
     """
     ReAct agent that uses a single `run_sql` tool to:
       1. Query FIPS metadata for geography resolution
-      2. Query field-description metadata for column-code resolution
+      2. Query field-description metadata for column codes
       3. Execute the final data query against ACS or redistricting tables
     """
 
@@ -56,12 +36,13 @@ class QueryWorkflow:
         self,
         settings: Settings | None = None,
         few_shot_retriever: FewShotRetriever | None = None,
+        agent_context: AgentContext | None = None,
     ) -> None:
         self._settings = settings or get_settings()
         self._snowflake_service = SnowflakeService(self._settings)
         self._llm_service = LLMService(self._settings)
         self._few_shot_retriever = few_shot_retriever
-
+        self._agent_context = agent_context or AgentContext(self._settings)
         self._system_prompt = build_system_prompt(
             db=self._settings.snowflake_database,
             schema=self._settings.snowflake_schema,
@@ -76,9 +57,6 @@ class QueryWorkflow:
 
         self._graph = self._build_graph()
 
-    # ------------------------------------------------------------------
-    # Tool factory — closure over SnowflakeService (no global state)
-    # ------------------------------------------------------------------
 
     def _build_run_sql_tool(self) -> StructuredTool:
         svc = self._snowflake_service
@@ -86,14 +64,11 @@ class QueryWorkflow:
         def run_sql(sql: str) -> str:
             """
             Execute a SQL query against the Snowflake database and return results as JSON.
-
-            Use this tool to:
             - Look up FIPS codes for geography resolution
             - Look up column codes from metadata tables (FIELD_DESCRIPTIONS)
             - Execute the final data query against ACS or redistricting tables
 
             Returns a JSON array of row dicts, or a SQL_ERROR string if it fails.
-            Inspect the results and adapt your next step accordingly.
             """
             try:
                 rows = svc.execute_query(sql)
@@ -108,10 +83,6 @@ class QueryWorkflow:
             description=run_sql.__doc__,
             args_schema=RunSQLInput,
         )
-
-    # ------------------------------------------------------------------
-    # LangGraph construction
-    # ------------------------------------------------------------------
 
     def _build_graph(self):
         def agent_node(state: AgentState) -> AgentState:
@@ -133,34 +104,37 @@ class QueryWorkflow:
         graph.add_conditional_edges("agent", should_continue)
         graph.add_edge("tools", "agent")
 
-        # recursion_limit prevents runaway loops (each agent+tools round = 2 steps)
         return graph.compile()
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
-    def invoke(self, user_query: str, include_debug: bool = False) -> Dict[str, Any]:
+    def invoke(self, session_id: str, user_query: str, include_debug: bool = False) -> Dict[str, Any]:
+        agent_context = self._agent_context
+        history = agent_context.get_context(session_id)    
         dynamic_few_shots = self._build_dynamic_few_shots(user_query)
         system_prompt = self._system_prompt
+
+        initial_messages=[]
+        initial_messages.append(SystemMessage(content=system_prompt))
+
         if dynamic_few_shots:
-            system_prompt = (
-                f"{self._system_prompt}\n\n"
+            few_shots_examples = (
                 "=====================================================================\n"
-                "DYNAMIC FEW-SHOT EXAMPLES (retrieved from FAISS)\n"
-                "Use these as guidance for decomposition and SQL strategy.\n"
+                "EXAMPLES\n"
                 "=====================================================================\n"
                 f"{dynamic_few_shots}"
             )
+            initial_messages.append(SystemMessage(content=few_shots_examples))
+        
+        for turn in history:
+            if turn["role"] == "user":
+                initial_messages.append(HumanMessage(content=turn["content"]))
+            elif turn["role"] == "assistant":
+                initial_messages.append(AIMessage(content=turn["content"]))
 
-        initial_messages: List[BaseMessage] = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_query),
-        ]
+        initial_messages.append(HumanMessage(content=user_query))
 
         try:
             result = self._graph.invoke(
-                {"messages": initial_messages, "user_query": user_query},
+                {"messages": initial_messages},
                 config={"recursion_limit": self._settings.max_agent_steps},
             )
         except Exception as exc:
@@ -203,6 +177,8 @@ class QueryWorkflow:
         }
 
         self._write_log(user_query, sql_calls, tool_results, final_answer, status)
+        agent_context.add_context(session_id, "user", user_query)
+        agent_context.add_context(session_id, "assistant", final_answer)
         return output
 
     def _build_dynamic_few_shots(self, user_query: str) -> str:
@@ -217,10 +193,6 @@ class QueryWorkflow:
             lines.append(ex)
             lines.append("")
         return "\n".join(lines).strip()
-
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
 
     def _extract_from_messages(
         self, messages: List[BaseMessage]
@@ -238,7 +210,6 @@ class QueryWorkflow:
                         if sql:
                             sql_calls.append(sql)
                 else:
-                    # AI message without tool calls = final response
                     if isinstance(msg.content, str) and msg.content.strip():
                         final_answer = msg.content.strip()
                     elif isinstance(msg.content, list):
@@ -266,10 +237,6 @@ class QueryWorkflow:
                 count += 1
         return count
 
-    # ------------------------------------------------------------------
-    # Execution log
-    # ------------------------------------------------------------------
-
     def _write_log(
         self,
         user_query: str,
@@ -289,8 +256,7 @@ class QueryWorkflow:
 
         for i, (sql, result) in enumerate(zip(sql_calls, tool_results), start=1):
             lines.append(f"  [{i}] SQL: {sql.strip()}")
-            # Show first 300 chars of result to keep log readable
-            preview = result[:300].replace("\n", " ")
+            preview = result.replace("\n", " ")[:500]
             lines.append(f"      RESULT: {preview}")
 
         lines.append("")

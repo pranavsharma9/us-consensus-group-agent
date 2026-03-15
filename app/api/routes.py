@@ -17,6 +17,7 @@ async def query_endpoint(request: Request, payload: QueryRequest) -> QueryRespon
 
     try:
         result = workflow.invoke(
+            session_id=payload.session_id,
             user_query=payload.query,
             include_debug=payload.include_debug,
         )
@@ -26,7 +27,6 @@ async def query_endpoint(request: Request, payload: QueryRequest) -> QueryRespon
 
     success = result.get("status") == "success"
 
-    # sql is now a list of executed SQL strings; join for display
     sql_calls: list = result.get("sql", [])
     sql_display = "\n---\n".join(sql_calls) if isinstance(sql_calls, list) else sql_calls or ""
 
@@ -40,6 +40,7 @@ async def query_endpoint(request: Request, payload: QueryRequest) -> QueryRespon
         metadata["tool_results"] = result.get("rows", [])
 
     return QueryResponse(
+        session_id=payload.session_id,
         success=success,
         answer=result.get("final_answer", ""),
         attempts=result.get("attempt", 1),

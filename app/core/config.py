@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO")
     max_attempts: int = Field(default=5)
     max_agent_steps: int = Field(default=10)
+    max_context_window: int = Field(default=20)
     few_shot_top_k: int = Field(default=2)
 
 
