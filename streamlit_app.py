@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import os
+import socket
 from pathlib import Path
 import tomllib
 from uuid import uuid4
@@ -49,6 +50,7 @@ API_QUERY_URL = _get_secret("API_QUERY_URL", "http://127.0.0.1:8000/query")
 API_BASE_URL = API_QUERY_URL.rsplit("/", 1)[0]
 USERID_APP = _get_secret("USERID_APP", "")
 PASSWORD_APP = _get_secret("PASSWORD_APP", "")
+API_TIMEOUT_SECONDS = 90
 
 
 def _sha256(value: str) -> str:
@@ -82,12 +84,42 @@ def _query_backend(user_query: str, session_id: str) -> dict:
     )
 
     try:
-        with request.urlopen(req, timeout=180) as resp:
+        with request.urlopen(req, timeout=API_TIMEOUT_SECONDS) as resp:
             body = resp.read().decode("utf-8")
             return json.loads(body)
     except error.HTTPError as exc:
-        raw = exc.read().decode("utf-8", errors="replace")
-        return {"success": False, "answer": "", "metadata": {"error_message": f"HTTP {exc.code}: {raw}"}}
+        if exc.code in {502, 503, 504}:
+            msg = (
+                "The backend took too long or is temporarily unavailable. "
+                "Please try again in a minute."
+            )
+        else:
+            msg = f"Backend request failed with HTTP {exc.code}."
+        return {"success": False, "answer": "", "metadata": {"error_message": msg}}
+    except (TimeoutError, socket.timeout):
+        return {
+            "success": False,
+            "answer": "",
+            "metadata": {
+                "error_message": (
+                    f"Request timed out after {API_TIMEOUT_SECONDS}s. "
+                    "Please simplify the question and try again."
+                )
+            },
+        }
+    except error.URLError as exc:
+        reason = getattr(exc, "reason", None)
+        if isinstance(reason, TimeoutError):
+            timeout_msg = (
+                f"Request timed out after {API_TIMEOUT_SECONDS}s. "
+                "Please simplify the question and try again."
+            )
+            return {"success": False, "answer": "", "metadata": {"error_message": timeout_msg}}
+        return {
+            "success": False,
+            "answer": "",
+            "metadata": {"error_message": "Could not reach backend service. Please try again."},
+        }
     except Exception as exc:
         return {"success": False, "answer": "", "metadata": {"error_message": str(exc)}}
 

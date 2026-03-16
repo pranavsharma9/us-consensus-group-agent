@@ -5,6 +5,7 @@ from typing import Annotated, Any, Dict, List, Literal
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import StructuredTool
+from langgraph.errors import GraphRecursionError
 from langgraph.graph import START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
@@ -214,6 +215,20 @@ class QueryWorkflow:
                 {"messages": initial_messages},
                 config={"recursion_limit": self._settings.max_agent_steps},
             )
+        except GraphRecursionError as exc:
+            logger.warning("Graph recursion limit reached: %s", exc)
+            agent_context.persist(session_id=session_id)
+            return {
+                "status": "failed",
+                "final_answer": (
+                    "I reached the execution step limit before finishing this answer. "
+                    "Please rephrase your question to be more specific."
+                ),
+                "error_message": str(exc),
+                "sql": [],
+                "rows": [],
+                "attempt": self._settings.max_agent_steps,
+            }
         except Exception as exc:
             logger.exception("Graph invocation failed: %s", exc)
             agent_context.persist(session_id=session_id)
