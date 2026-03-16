@@ -39,11 +39,11 @@ This app helps users ask natural-language questions about US Census data and get
 
 ## APP Login (REQUIRED)
 
-![App Login Screen](app/img/app-login.png)
+![App Login Screen](https://github.com/pranavsharma9/us-consensus-group-agent/blob/main/app/img/login_img.png)
 
 ## Sample Query 
 
-![Sample Query Response](app/img/sample-query.png)
+![Sample Query Response](https://github.com/pranavsharma9/us-consensus-group-agent/blob/main/app/img/query_img.png)
 
 ## Core Components
 
