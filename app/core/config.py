@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     max_context_window: int = Field(default=20)
     few_shot_top_k: int = Field(default=2)
 
+    userid_app: str = Field(default="")
+    password_app: str = Field(default="")
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

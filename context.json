@@ -1,0 +1,38 @@
+{
+  "2659d123-81f7-461a-818d-e014f7c8e8b2": [
+    {
+      "role": "user",
+      "content": "What percentage of households have broadband internet in Seattle?"
+    },
+    {
+      "role": "assistant",
+      "content": "Approximately **91.58%** of households in Seattle (using King County as a proxy) have broadband internet access according to the 2019 ACS data."
+    }
+  ],
+  "85a55bd6-6cd2-45a6-9843-ef806af4e5db": [
+    {
+      "role": "user",
+      "content": "How many women live in california?"
+    },
+    {
+      "role": "assistant",
+      "content": "According to the 2019 ACS data, there are approximately 19,757,199 women living in California."
+    },
+    {
+      "role": "user",
+      "content": "What about men?"
+    },
+    {
+      "role": "assistant",
+      "content": "The total number of men living in California is approximately 19,526,298 according to the 2019 ACS data. \n\nNote: This data is for the year 2019."
+    },
+    {
+      "role": "user",
+      "content": "How many people have internet in sEATTLE?"
+    },
+    {
+      "role": "assistant",
+      "content": "Approximately 807,801 households in King County, Washington (which includes Seattle) have internet access according to the 2019 ACS data.\n\nNote: This data is for the year 2019."
+    }
+  ]
+}

@@ -13,8 +13,6 @@ class QueryRequest(BaseModel):
     @field_validator("session_id", mode="before")
     @classmethod
     def normalize_session_id(cls, value: object) -> str:
-        # Swagger /docs often sends placeholder values like "string".
-        # Treat placeholders/blank as missing and generate a real UUID.
         if value is None:
             return str(uuid4())
         session_id = str(value).strip()

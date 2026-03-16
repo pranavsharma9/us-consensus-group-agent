@@ -2,6 +2,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Request
 
+from app.core.rate_limit import limiter
 from app.graph.workflow import QueryWorkflow
 from app.schemas.query import QueryRequest, QueryResponse
 
@@ -10,6 +11,7 @@ router = APIRouter()
 
 
 @router.post("/query", response_model=QueryResponse)
+@limiter.limit("10/minute")
 async def query_endpoint(request: Request, payload: QueryRequest) -> QueryResponse:
     workflow: QueryWorkflow | None = getattr(request.app.state, "workflow", None)
     if workflow is None:
