@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 log.txt
 README.md
+test.py
+secrets.toml

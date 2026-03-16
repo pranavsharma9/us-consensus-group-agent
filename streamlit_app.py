@@ -2,19 +2,53 @@ import hashlib
 import hmac
 import json
 import os
+from pathlib import Path
+import tomllib
 from uuid import uuid4
 from urllib import error, request
 
 import streamlit as st
-from dotenv import load_dotenv
+from streamlit.errors import StreamlitSecretNotFoundError
+
+def _load_local_secrets() -> dict:
+    local_path = Path(__file__).resolve().parent / "secrets.toml"
+    if not local_path.exists():
+        return {}
+    try:
+        with local_path.open("rb") as f:
+            data = tomllib.load(f)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
 
 
-load_dotenv()
+_LOCAL_SECRETS = _load_local_secrets()
 
-API_QUERY_URL = os.getenv("API_QUERY_URL", "http://127.0.0.1:8000/query")
+
+def _get_secret(key: str, default: str = "") -> str:
+    # Order of precedence: Streamlit secrets -> env var -> root secrets.toml -> default
+    try:
+        value = st.secrets.get(key)
+        if value is not None:
+            return str(value)
+    except (StreamlitSecretNotFoundError, FileNotFoundError, KeyError):
+        pass
+
+    env_value = os.getenv(key)
+    if env_value is not None:
+        return env_value
+
+    local_value = _LOCAL_SECRETS.get(key)
+    if local_value is not None:
+        return str(local_value)
+
+    return default
+
+
+API_QUERY_URL = _get_secret("API_QUERY_URL", "http://127.0.0.1:8000/query")
 API_BASE_URL = API_QUERY_URL.rsplit("/", 1)[0]
-USERID_APP = os.getenv("USERID_APP", "")
-PASSWORD_APP = os.getenv("PASSWORD_APP", "")
+USERID_APP = _get_secret("USERID_APP", "")
+PASSWORD_APP = _get_secret("PASSWORD_APP", "")
 
 
 def _sha256(value: str) -> str:
@@ -122,7 +156,7 @@ def _show_login() -> None:
     st.caption("Enter credentials to access the testing app.")
 
     if not USERID_APP or not PASSWORD_APP:
-        st.error("Missing USERID_APP or PASSWORD_APP in environment.")
+        st.error("Missing USERID_APP or PASSWORD_APP in Streamlit secrets.")
         st.stop()
 
     with st.form("login_form", clear_on_submit=False):
