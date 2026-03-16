@@ -105,10 +105,13 @@ This app helps users ask natural-language questions about US Census data and get
   few shots could be improved and prompt could also be more focused.
   This should improve SQL precision, especially for ambiguous intents and multi-condition prompts.
 
+- Query re-writting for Dynamic Few Shot retrieval
+  Presently, for every single user query, we retrieve few shot examples to align the agent with how to approach the query. However, when followup questions are asked without proper context in the user query, the examples retrieved might not be the most optimal (Eg. "What about male population?". Here, context in user query is missing and needs to be retrieved from context window). Hence, we can add a query rewritter layer before fetching dynamic examples which rewritted the user query based on context it has from the context window, to ensure we pick the most optmial examples (this would increase latency by a few seconds, but help improve accuracy)
+
 - Move session context storage from per-session JSON to a database.  
   Database-backed memory would be safer for production. Presently context is saved in
   a .json file per session ID and on server restart, this will get lost. If extra time could be provided, we could offload this to a DB.
-  It would also allow querying historical sessions for analytics, debugging, and product insights.
+  It would also allow querying historical sessions for analytics, debugging, and product insights. Also, allow session to be per User and not just a single user has all sessions (choose this design because of simplicity)
 
 - Improve logging and use Supabase for centralized logs.  
   Centralized structured logs can make incident investigation and model behavior analysis much faster.  
