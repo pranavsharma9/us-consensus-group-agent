@@ -37,6 +37,14 @@ This app helps users ask natural-language questions about US Census data and get
 > - "What percentage of housing units are renter-occupied in California?"
 > - "How many Hispanic or Latino people live in Arizona?"
 
+## APP Login (REQUIRED)
+
+![App Login Screen](app/img/app-login.png)
+
+## Sample Query 
+
+![Sample Query Response](app/img/sample-query.png)
+
 ## Core Components
 
 - Data source: pulls Census dataset from Snowflake Marketplace - [SafeGraph US Open Census Data - Neighborhood Insights (Free)](https://urldefense.com/v3/__https://app.snowflake.com/marketplace/listing/GZSNZ2UNN0/safegraph-us-open-census-data-neighborhood-insights-free-dataset__;!!DZ3fjg!_NCgyKaLKqUiUbcn65anGBFr4LfW_3KoQOT5i3dpWmnAF3mxpVTYeNl8b1wHulXYk28r0AIjieZmE9slYga_WJWp3vcNNURE0g$)
