@@ -53,28 +53,3 @@ class SnowflakeService:
                 return [dict(row) for row in cursor.fetchall()]
         finally:
             connection.close()
-
-    def fetch_distinct_values(
-        self,
-        source_type: str,
-        field_name: str,
-        limit: int = 1000,
-    ) -> List[str]:
-        """
-        Fetch distinct values from a source table.
-
-        Expected source_type format:
-            DB.SCHEMA."TABLE"
-        Example:
-            US_OPEN_CENSUS_DATA__NEIGHBORHOOD_INSIGHTS__FREE_DATASET.PUBLIC."2019_METADATA_CBG_FIPS_CODES"
-        """
-        qualified_field = self._quote_identifier(field_name)
-        sql = (
-            f"SELECT DISTINCT {qualified_field} "
-            f"FROM {source_type} "
-            f"WHERE {qualified_field} IS NOT NULL "
-            f"LIMIT {int(limit)}"
-        )
-        rows = self.execute_query(sql)
-        values = [str(row.get(field_name)) for row in rows if row.get(field_name) is not None]
-        return values

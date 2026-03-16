@@ -1,16 +1,17 @@
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Literal
+from typing import Annotated, Any, Dict, List, Literal
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import StructuredTool
 from langgraph.graph import START, StateGraph
+from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel
+from typing_extensions import TypedDict
 
 from app.core.config import Settings, get_settings
-from app.graph.state import AgentState
 from app.prompts.prompts import build_system_prompt
 from app.services.llm_service import LLMService
 from app.services.few_shot_retriever import FewShotRetriever
@@ -18,6 +19,11 @@ from app.services.snowflake_service import SnowflakeService
 from app.services.agent_context import AgentContext
 
 logger = logging.getLogger(__name__)
+
+
+class AgentState(TypedDict):
+    messages: Annotated[List[BaseMessage], add_messages]
+
 
 _LOG_FILE = "log.txt"
 _GUARDRAIL_MESSAGE = """
@@ -160,7 +166,7 @@ class QueryWorkflow:
             return {"messages": [response]}
 
         def should_continue(state: AgentState) -> Literal["tools", "__end__"]:
-            last: BaseMessage = state["messages"][-1]
+            last = state["messages"][-1]
             if isinstance(last, AIMessage) and last.tool_calls:
                 if self._count_sql_errors(state["messages"]) >= self._settings.max_attempts:
                     return "__end__"
@@ -220,7 +226,7 @@ class QueryWorkflow:
                 "attempt": 1,
             }
 
-        messages: List[BaseMessage] = result.get("messages", [])
+        messages = result.get("messages", [])
         sql_calls, tool_results, final_answer = self._extract_from_messages(messages)
 
         sql_error_count = self._count_sql_errors(messages)
@@ -231,7 +237,7 @@ class QueryWorkflow:
             )
 
         status = "success" if final_answer else "failed"
-        output: Dict[str, Any] = {
+        output = {
             "status": status,
             "final_answer": final_answer,
             "error_message": (
@@ -254,13 +260,19 @@ class QueryWorkflow:
         agent_context.persist(session_id=session_id)
         return output
 
+    def list_sessions(self) -> List[Dict[str, str]]:
+        return self._agent_context.list_sessions()
+
+    def get_session_context(self, session_id: str) -> List[Dict[str, str]]:
+        return self._agent_context.get_context(session_id)
+
     def _build_dynamic_few_shots(self, user_query: str) -> str:
         if self._few_shot_retriever is None:
             return ""
         examples = self._few_shot_retriever.retrieve(user_query, k=self._settings.few_shot_top_k)
         if not examples:
             return ""
-        lines: List[str] = []
+        lines = []
         for i, ex in enumerate(examples, start=1):
             lines.append(f"[EXAMPLE {i}]")
             lines.append(ex)
@@ -270,9 +282,9 @@ class QueryWorkflow:
     def _extract_from_messages(
         self, messages: List[BaseMessage]
     ) -> tuple[List[str], List[str], str]:
-        """Return (sql_calls, tool_results, final_answer)."""
-        sql_calls: List[str] = []
-        tool_results: List[str] = []
+        """Returns (sql_calls, tool_results, final_answer)."""
+        sql_calls = []
+        tool_results = []
         final_answer = ""
 
         for msg in messages:

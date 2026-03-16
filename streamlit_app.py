@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 API_QUERY_URL = os.getenv("API_QUERY_URL", "http://127.0.0.1:8000/query")
+API_BASE_URL = API_QUERY_URL.rsplit("/", 1)[0]
 USERID_APP = os.getenv("USERID_APP", "")
 PASSWORD_APP = os.getenv("PASSWORD_APP", "")
 
@@ -57,6 +58,50 @@ def _query_backend(user_query: str, session_id: str) -> dict:
         return {"success": False, "answer": "", "metadata": {"error_message": str(exc)}}
 
 
+def _get_sessions() -> list[dict]:
+    req = request.Request(
+        f"{API_BASE_URL}/sessions",
+        headers={"Content-Type": "application/json"},
+        method="GET",
+    )
+    try:
+        with request.urlopen(req, timeout=30) as resp:
+            body = resp.read().decode("utf-8")
+            data = json.loads(body)
+            return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _get_session_context(session_id: str) -> list[dict]:
+    req = request.Request(
+        f"{API_BASE_URL}/sessions/{session_id}/context",
+        headers={"Content-Type": "application/json"},
+        method="GET",
+    )
+    try:
+        with request.urlopen(req, timeout=30) as resp:
+            body = resp.read().decode("utf-8")
+            data = json.loads(body)
+            return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _context_to_conversations(turns: list[dict]) -> list[dict]:
+    conversations = []
+    pending_question = ""
+    for turn in turns:
+        role = turn.get("role")
+        content = str(turn.get("content", ""))
+        if role == "user":
+            pending_question = content
+        elif role == "assistant" and pending_question:
+            conversations.append({"question": pending_question, "answer": content})
+            pending_question = ""
+    return conversations[-3:]
+
+
 def _init_state() -> None:
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
@@ -98,9 +143,45 @@ def _show_login() -> None:
 
 def _show_app() -> None:
     st.title("Snowflake US Census Agent")
-    st.caption("Session is preserved while this browser session is active.")
+    st.caption("Conversation context is preserved per Session. You can start a new session at any time.")
 
-    top_left, top_right = st.columns([4, 1])
+    sessions = _get_sessions()
+    session_ids = [s.get("session_id", "") for s in sessions if s.get("session_id")]
+    session_titles = {
+        s.get("session_id", ""): s.get("title", "New Session")
+        for s in sessions
+        if s.get("session_id")
+    }
+    if st.session_state.session_id not in session_ids:
+        session_ids = [st.session_state.session_id] + session_ids
+        session_titles[st.session_state.session_id] = "New Session"
+
+    top_left, top_mid, top_right = st.columns([3, 2, 1])
+    with top_left:
+        if session_ids:
+            selected_session = st.selectbox(
+                "Previous sessions",
+                options=session_ids,
+                index=session_ids.index(st.session_state.session_id),
+                format_func=lambda sid: session_titles.get(sid, sid),
+            )
+            if selected_session != st.session_state.session_id:
+                st.session_state.session_id = selected_session
+                st.session_state.conversations = _context_to_conversations(
+                    _get_session_context(selected_session)
+                )
+                st.session_state.current_error = ""
+                st.rerun()
+
+    with top_mid:
+        if st.button("Start New Session"):
+            st.session_state.session_id = str(uuid4())
+            st.session_state.current_question = ""
+            st.session_state.current_answer = ""
+            st.session_state.current_error = ""
+            st.session_state.conversations = []
+            st.rerun()
+
     with top_right:
         if st.button("Logout"):
             st.session_state.authenticated = False
@@ -121,10 +202,12 @@ def _show_app() -> None:
         st.session_state.current_question = query.strip()
         st.session_state.current_answer = result.get("answer", "")
         st.session_state.current_error = result.get("metadata", {}).get("error_message", "")
-        st.session_state.conversations.append({
-            "question": st.session_state.current_question,
-            "answer": st.session_state.current_answer,
-        })
+        st.session_state.conversations.append(
+            {
+                "question": st.session_state.current_question,
+                "answer": st.session_state.current_answer,
+            }
+        )
         st.session_state.conversations = st.session_state.conversations[-3:]
         st.session_state.session_id = result.get("session_id") or st.session_state.session_id
 

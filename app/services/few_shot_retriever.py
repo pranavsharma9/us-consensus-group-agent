@@ -11,14 +11,13 @@ from app.core.config import Settings
 
 logger = logging.getLogger(__name__)
 
-
 class FewShotRetriever:
     """FAISS-backed retriever for dynamic few-shot examples."""
 
     def __init__(self, settings: Settings, json_path: Path) -> None:
         self._settings = settings
         self._json_path = json_path
-        self._vectorstore: FAISS | None = None
+        self._vectorstore = None
         self._embeddings = OpenAIEmbeddings(
             model=settings.openai_embedding_model,
             api_key=settings.openai_api_key,
@@ -56,7 +55,7 @@ class FewShotRetriever:
         if not isinstance(rows, list):
             return []
 
-        examples: list[str] = []
+        examples = []
         for row in rows:
             text = self._to_text(row)
             if text:
@@ -70,20 +69,24 @@ class FewShotRetriever:
         if not isinstance(row, dict):
             return ""
 
-        q = str(row.get("question") or row.get("query") or "").strip()
-        r = str(row.get("reasoning") or row.get("steps") or "").strip()
-        s = str(row.get("sql") or "").strip()
-        a = str(row.get("answer") or "").strip()
+        q = str(
+            row.get("user_query")
+        ).strip()
+        category = str(
+            row.get("metadata_filter_category")
+        ).strip()
+        execution = str(
+            row.get("execution_solution")
+            or ""
+        ).strip()
 
         parts = []
         if q:
             parts.append(f"Question: {q}")
-        if r:
-            parts.append(f"Reasoning: {r}")
-        if s:
-            parts.append(f"SQL: {s}")
-        if a:
-            parts.append(f"Answer: {a}")
+        if category:
+            parts.append(f"Category: {category}")
+        if execution:
+            parts.append(f"Execution: {execution}")
 
         if parts:
             return "\n".join(parts)

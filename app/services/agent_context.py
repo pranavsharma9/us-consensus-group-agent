@@ -10,7 +10,7 @@ class AgentContext:
         self.max_context_window = settings.max_context_window
         default_storage_path = Path(__file__).resolve().parents[2] / "context.json"
         self._storage_path = storage_path or default_storage_path
-        self.context_window: dict[str, list[dict[str, str]]] = {}
+        self.context_window = {}
         self._load_from_file()
 
     def add_context(
@@ -24,6 +24,20 @@ class AgentContext:
 
     def get_context(self, session_id: str) -> list[dict[str, str]]:
         return self.context_window.get(session_id, [])
+
+    def list_sessions(self) -> list[dict[str, str]]:
+        sessions = []
+        for session_id, turns in self.context_window.items():
+            title = "New Session"
+            for turn in turns:
+                if turn.get("role") == "user":
+                    text = str(turn.get("content", "")).strip()
+                    if text:
+                        title = text[:80]
+                        break
+            sessions.append({"session_id": session_id, "title": title})
+        sessions.reverse()
+        return sessions
 
     def persist(self, session_id: str | None = None) -> None:
         try:
@@ -53,7 +67,7 @@ class AgentContext:
         for session_id, turns in payload.items():
             if not isinstance(session_id, str) or not isinstance(turns, list):
                 continue
-            all_data: list[dict[str, str]] = []
+            all_data = []
 
             for data in turns:
                 if not isinstance(data, dict):

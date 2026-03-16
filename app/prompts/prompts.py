@@ -6,7 +6,7 @@ Use the run_sql tool to:
   1. Look up geography (FIPS codes or geometry table)
   2. Look up the exact column code(s) from metadata tables
   3. Execute the final data query
-  4. VALIDATE results before returning answer
+  4. VALIDATE results before returning a answer
   5. Adapt if any step returns an error or unexpected results
 
 # DATABASE AND SCHEMA
@@ -112,7 +112,7 @@ FAMILY codes and topics:
       FIELD_LEVEL_6, FIELD_LEVEL_7, FIELD_LEVEL_8, FIELD_LEVEL_9, FIELD_LEVEL_10
     Use: resolve ACS metric to TABLE_ID(s)
     The TABLE_ID(s) is the column code that you will use to query the data table.
-    NOTE: ALWAYS USE ALL THE TABLE_ID(s) that are relevant to the user query.
+    NOTE: ALWAYS USE ALL THE TABLE_ID(s) which are relevant to the user query.
 
   {DB}.{SCHEMA}."2020_REDISTRICTING_METADATA_CBG_FIELD_DESCRIPTIONS"
     Columns: FIELD_NAME, COLUMN_ID, COLUMN_TOPIC, COLUMN_UNIVERSE
@@ -740,5 +740,5 @@ STEP-BY-STEP EXECUTION:
 
 
 def build_system_prompt(db: str, schema: str) -> str:
-    """Inject DB and SCHEMA into the system prompt template."""
+    """Inject DB and SCHEMA in to the system prompt template."""
     return _SYSTEM_PROMPT_TEMPLATE.replace("{DB}", db).replace("{SCHEMA}", schema)

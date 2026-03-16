@@ -6,15 +6,18 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi import _rate_limit_exceeded_handler
 
+import logging
+
 from app.api.routes import router as query_router
-from app.core.config import get_settings
-from app.core.logging import setup_logging
-from app.core.rate_limit import limiter
+from app.core.config import get_settings, limiter
 from app.graph.workflow import QueryWorkflow
 from app.services.agent_context import AgentContext
 from app.services.few_shot_retriever import FewShotRetriever
 settings = get_settings()
-setup_logging(settings.log_level)
+logging.basicConfig(
+    level=settings.log_level.upper(),
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
 
 
 @asynccontextmanager

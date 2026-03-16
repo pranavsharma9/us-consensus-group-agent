@@ -3,6 +3,8 @@ from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 
 class Settings(BaseSettings):
@@ -26,8 +28,8 @@ class Settings(BaseSettings):
 
     log_level: str = Field(default="INFO")
     max_attempts: int = Field(default=5)
-    max_agent_steps: int = Field(default=10)
-    max_context_window: int = Field(default=20)
+    max_agent_steps: int = Field(default=20)
+    max_context_window: int = Field(default=50)
     few_shot_top_k: int = Field(default=2)
 
     userid_app: str = Field(default="")
@@ -37,3 +39,6 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
+
+
+limiter = Limiter(key_func=get_remote_address)
